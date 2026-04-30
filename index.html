@@ -134,7 +134,7 @@
       const r = await _validateKey(key);
       if(r.ok) {
         _licData = r.data;
-        sessionStorage.setItem(_LIC_SESS_KEY, JSON.stringify({
+        localStorage.setItem(_LIC_SESS_KEY, JSON.stringify({
           key, company:r.data.company||'', customerName:r.data.customerName||'',
           expiryDate:r.data.expiryDate?.toString(), readOnly:r.readOnly, ts:Date.now()
         }));
@@ -198,7 +198,7 @@
   }
 
   function doLicLogout() {
-    sessionStorage.removeItem(_LIC_SESS_KEY);
+    localStorage.removeItem(_LIC_SESS_KEY);
     location.reload();
   }
 
@@ -229,7 +229,7 @@
 
   // ── Auto-check session on load ──
   (async function _autoCheck() {
-    const sess = sessionStorage.getItem(_LIC_SESS_KEY);
+    const sess = localStorage.getItem(_LIC_SESS_KEY);
     if(!sess) return; // gate stays visible
     try {
       const s = JSON.parse(sess);
@@ -238,10 +238,10 @@
         _licData = r.data;
         _unlockApp(r.readOnly, r.data);
       } else {
-        sessionStorage.removeItem(_LIC_SESS_KEY);
+        localStorage.removeItem(_LIC_SESS_KEY);
         // gate stays visible
       }
-    } catch(e) { sessionStorage.removeItem(_LIC_SESS_KEY); }
+    } catch(e) { localStorage.removeItem(_LIC_SESS_KEY); }
   })();
   </script>
 
