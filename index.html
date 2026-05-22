@@ -663,10 +663,29 @@ function ThemePicker({ dk, colourKey, changeColour, cycleColour }) {
   );
 }
 
-function AppShell({ dk, toggleTheme, colourKey, cycleColour, changeColour, currentUser, nav, activePage, setActivePage, children, role, logout, requirements, onNotifClick }) {
+function AppShell({ dk, toggleTheme, colourKey, cycleColour, changeColour, currentUser, nav, activePage, setActivePage, children, role, logout, requirements, onNotifClick, licenseExpiry }) {
   const [collapsed, setCollapsed] = useState(false);
   const roleTag = { admin:'Administrator', top_management:'Top Management', plant_head:'Plant Head', user:'Team Member' }[role];
   const roleBg  = { admin:'t-badge-admin', top_management:'bg-purple-100 text-purple-700', plant_head:'bg-teal-100 text-teal-700', user:'bg-green-100 text-green-700' }[role];
+
+  // License expiry badge (admin only)
+  const LicenseExpiryBadge = () => {
+    if (role !== 'admin' || !licenseExpiry) return null;
+    const expDate = licenseExpiry instanceof Date ? licenseExpiry : new Date(licenseExpiry);
+    const now = new Date();
+    const daysLeft = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+    const formatted = expDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    let color, bg, border, icon;
+    if (daysLeft <= 0)       { color='#dc2626'; bg='rgba(220,38,38,.1)';  border='rgba(220,38,38,.3)';  icon='🔴'; }
+    else if (daysLeft <= 30) { color='#d97706'; bg='rgba(217,119,6,.1)';  border='rgba(217,119,6,.3)';  icon='🟡'; }
+    else                     { color='#16a34a'; bg='rgba(22,163,74,.1)';  border='rgba(22,163,74,.25)'; icon='🟢'; }
+    return (
+      <span title={`License expires: ${formatted} (${daysLeft > 0 ? daysLeft + ' days left' : 'EXPIRED'})`}
+        style={{display:'inline-flex',alignItems:'center',gap:4,background:bg,border:`1px solid ${border}`,borderRadius:16,padding:'2px 9px',fontSize:10,color,fontWeight:600,whiteSpace:'nowrap',cursor:'default',flexShrink:0}}>
+        {icon} Lic. Exp: {formatted}{daysLeft <= 30 && daysLeft > 0 ? ` (${daysLeft}d)` : daysLeft <= 0 ? ' EXPIRED' : ''}
+      </span>
+    );
+  };
 
   return (
     <div className={`flex h-screen overflow-hidden font-sans ${dk?'bg-gray-900 text-white':'bg-slate-50 text-gray-900'}`}
@@ -728,6 +747,8 @@ function AppShell({ dk, toggleTheme, colourKey, cycleColour, changeColour, curre
           <div className="flex items-center gap-2">
             {/* Firebase connection status */}
             <FirebaseStatusBadge />
+            {/* License expiry badge (admin only) */}
+            <LicenseExpiryBadge />
             {/* Security badge */}
             <span title="PBKDF2 hashing + brute-force protection active" style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(22,163,74,.12)',border:'1px solid rgba(22,163,74,.25)',borderRadius:16,padding:'2px 8px',fontSize:10,color:'#16a34a',fontWeight:600,whiteSpace:'nowrap',cursor:'default',flexShrink:0}}>🔒 Secured</span>
             {/* Notification Bell — admin & top management only */}
@@ -4966,7 +4987,7 @@ function AdminCategories({ dk, categories, updateCategories }) {
 /* ═══════════════════════════════════════════
    ADMIN DASHBOARD
 ═══════════════════════════════════════════ */
-function AdminDashboard({ dk, toggleTheme, colourKey, cycleColour, changeColour, currentUser, plants, users, requirements, updatePlants, updateUsers, updateRequirements, logout, categories, updateCategories }) {
+function AdminDashboard({ dk, toggleTheme, colourKey, cycleColour, changeColour, currentUser, plants, users, requirements, updatePlants, updateUsers, updateRequirements, logout, categories, updateCategories, licenseExpiry }) {
   const [activePage, setActivePage] = useState('overview');
   const overdueCount = requirements.filter(r=>r.status==='Overdue').length;
 
@@ -5005,7 +5026,7 @@ function AdminDashboard({ dk, toggleTheme, colourKey, cycleColour, changeColour,
   return (
     <AppShell dk={dk} toggleTheme={toggleTheme} colourKey={colourKey} cycleColour={cycleColour} changeColour={changeColour} currentUser={currentUser} nav={nav}
       activePage={activePage} setActivePage={setActivePage} role="admin" logout={logout}
-      requirements={requirements} onNotifClick={handleNotifClick}>
+      requirements={requirements} onNotifClick={handleNotifClick} licenseExpiry={licenseExpiry}>
       {pagesWithNotif[activePage] || pages[activePage]}
     </AppShell>
   );
@@ -5958,7 +5979,7 @@ function LicenseGate({ dk, onValidated }) {
       // persist so admin doesn't re-enter every session
       try { await _secSet('adminLicenseKey', keyInput.trim().toUpperCase()); } catch(_) {}
       setStatus('idle');
-      onValidated(keyInput.trim().toUpperCase());
+      onValidated(keyInput.trim().toUpperCase(), result.data?.expiryDate || null);
     } else {
       setStatus('error');
       setErrMsg(getErrMsg(result));
@@ -6060,6 +6081,7 @@ function App() {
   const [ready,            setReady]            = useState(false);
   const [syncStatus,       setSyncStatus]       = useState('idle'); // 'idle'|'syncing'|'synced'|'error'
   const [licenseValidated, setLicenseValidated] = useState(false); // true once admin license is confirmed
+  const [licenseExpiry,   setLicenseExpiry]   = useState(null);   // Date | null
 
   /* ── 1. Boot: load from Firebase, block login screen until users are loaded ── */
   useEffect(() => {
@@ -6076,7 +6098,7 @@ function App() {
         const cachedKey = await _secGet('adminLicenseKey');
         if (cachedKey) {
           const result = await validateAdminLicense(cachedKey);
-          if (result.valid) setLicenseValidated(true);
+          if (result.valid) { setLicenseValidated(true); if (result.data?.expiryDate) setLicenseExpiry(result.data.expiryDate); }
           else localStorage.removeItem('adminLicenseKey'); // expired/revoked — clear it
         }
       } catch(_) {}
@@ -6305,12 +6327,12 @@ function App() {
             let validated = false;
             try {
               const localKey = await _secGet('adminLicenseKey');
-              if (localKey) { const r = await validateAdminLicense(localKey); if (r.valid) validated=true; else await _secSet('adminLicenseKey', null).catch(()=>{}); }
+              if (localKey) { const r = await validateAdminLicense(localKey); if (r.valid) { validated=true; if (r.data?.expiryDate) setLicenseExpiry(r.data.expiryDate); } else await _secSet('adminLicenseKey', null).catch(()=>{}); }
             } catch(_) {}
             if (!validated) {
               try {
                 const savedKey = u.validatedLicenseKey;
-                if (savedKey) { const r = await validateAdminLicense(savedKey); if (r.valid) { validated=true; try{ await _secSet('adminLicenseKey', savedKey.trim().toUpperCase()); }catch(_){} } }
+                if (savedKey) { const r = await validateAdminLicense(savedKey); if (r.valid) { validated=true; if (r.data?.expiryDate) setLicenseExpiry(r.data.expiryDate); try{ await _secSet('adminLicenseKey', savedKey.trim().toUpperCase()); }catch(_){} } }
               } catch(_) {}
             }
             if (validated) setLicenseValidated(true);
@@ -6336,7 +6358,7 @@ function App() {
         if (u.role === 'admin') {
           try {
             const localKey = await _secGet('adminLicenseKey');
-            if (localKey) { const r = await validateAdminLicense(localKey); if (r.valid) setLicenseValidated(true); else localStorage.removeItem('adminLicenseKey'); }
+            if (localKey) { const r = await validateAdminLicense(localKey); if (r.valid) { setLicenseValidated(true); if (r.data?.expiryDate) setLicenseExpiry(r.data.expiryDate); } else localStorage.removeItem('adminLicenseKey'); }
           } catch(_) {}
         }
         setPage(u.role);
@@ -6352,6 +6374,7 @@ function App() {
     setCurrentUser(null);
     setPage('login');
     setLicenseValidated(false);
+    setLicenseExpiry(null);
     // Keep adminLicenseKey in localStorage so next login on this device is instant.
     // The Firestore user record also stores it for cross-device validation.
   };
@@ -6377,14 +6400,15 @@ function App() {
   );
 
   const ctx = { dk, toggleTheme, colourKey, cycleColour, changeColour, currentUser, plants, users, requirements,
-                updatePlants, updateUsers, updateRequirements, logout, syncStatus, categories, updateCategories };
+                updatePlants, updateUsers, updateRequirements, logout, syncStatus, categories, updateCategories, licenseExpiry };
 
   if (page==='login')          return <LoginPage login={login} dk={dk} toggleTheme={toggleTheme} colourKey={colourKey} changeColour={changeColour} />;
   if (page==='admin') {
     // Developer account bypasses the license gate entirely
     if (!currentUser?._isDev && !licenseValidated)
-      return <LicenseGate dk={dk} onValidated={(key) => {
+      return <LicenseGate dk={dk} onValidated={(key, expiry) => {
         setLicenseValidated(true);
+        if (expiry) setLicenseExpiry(expiry);
         // Persist validated key to this user's Firestore doc so other devices skip the gate
         if (key && currentUser?.id) {
           try {
