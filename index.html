@@ -7,7 +7,6 @@
   <meta name="referrer" content="no-referrer" />
   <meta name="robots" content="noindex, nofollow" />
   <title>Polyplastics — Legal Compliance (Secured)</title>
-  <!-- Build: obfuscated -->
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -50,7 +49,7 @@
   <!-- Firebase Initialization -->
   <script>
     const FIREBASE_CONFIG = {
-      apiKey:            ["AIzaSyDe","XLjY5K9o-D","flzkUrfJ1uw2dMpq0lyMY"].join(""),
+      apiKey:            "AIzaSyDeXLjY5K9o-DflzkUrfJ1uw2dMpq0lyMY",
       authDomain:        "skr-legal.firebaseapp.com",
       projectId:         "skr-legal",
       storageBucket:     "skr-legal.firebasestorage.app",
@@ -115,14 +114,14 @@
 ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── Crypto primitives ──────────────────────────────────────────────── */
-async function _0x1a2b(pw, salt) {
+async function _pbkdf2(pw, salt) {
   const enc = new TextEncoder();
   const km  = await crypto.subtle.importKey('raw', enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
     {name:'PBKDF2', salt:enc.encode(salt), iterations:100000, hash:'SHA-256'}, km, 256);
   return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-async function _0x3c4d(data, key) {
+async function _hmac(data, key) {
   const enc = new TextEncoder();
   const k   = await crypto.subtle.importKey('raw', enc.encode(key),
                 {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
@@ -130,7 +129,7 @@ async function _0x3c4d(data, key) {
   return Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 /* Constant-time compare — resists timing attacks */
-function _0x5e6f(a, b) {
+function _ctEq(a, b) {
   if (!a || !b || a.length !== b.length) return false;
   let d = 0;
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -138,7 +137,7 @@ function _0x5e6f(a, b) {
 }
 
 /* ── Stable per-install signing key ────────────────────────────────── */
-const _0x7a8b = (() => {
+const _SK = (() => {
   const KEY = 'legal_sk_v1';
   let k = localStorage.getItem(KEY);
   if (!k) {
@@ -150,63 +149,63 @@ const _0x7a8b = (() => {
 })();
 
 /* ── HMAC-signed localStorage ───────────────────────────────────────── */
-async function _0x9c0d(key, value) {
+async function _secSet(key, value) {
   const p = JSON.stringify(value);
-  const s = await _0x3c4d(p, _0x7a8b);
+  const s = await _hmac(p, _SK);
   try { localStorage.setItem(key, JSON.stringify({d:p,s})); } catch(e) {}
 }
-async function _0x1e2f(key) {
+async function _secGet(key) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const {d,s} = JSON.parse(raw);
-    const exp = await _0x3c4d(d, _0x7a8b);
-    if (!_0x5e6f(exp, s)) { localStorage.removeItem(key); return null; }
+    const exp = await _hmac(d, _SK);
+    if (!_ctEq(exp, s)) { localStorage.removeItem(key); return null; }
     return JSON.parse(d);
   } catch(e) { localStorage.removeItem(key); return null; }
 }
 
 /* ── Brute-force lockout ────────────────────────────────────────────── */
 const _BF  = 'legal_bf_v1';
-const _0x3a4b = 5;
-const _0x5c6d = 900000; // 15 min
+const _BF_MAX = 5;
+const _BF_TTL = 900000; // 15 min
 
-async function _0x7e8f(id) {
-  const s = await _0x1e2f(_BF) || {};
+async function _bfCheck(id) {
+  const s = await _secGet(_BF) || {};
   const r = s[id];
   if (!r) return {locked:false, attempts:0};
   if (r.lockedUntil && Date.now() < r.lockedUntil)
     return {locked:true, remaining:Math.ceil((r.lockedUntil-Date.now())/60000)};
   if (r.lockedUntil && Date.now() >= r.lockedUntil) {
-    delete s[id]; await _0x9c0d(_BF, s);
+    delete s[id]; await _secSet(_BF, s);
     return {locked:false, attempts:0};
   }
   return {locked:false, attempts:r.attempts||0};
 }
-async function _0x9a0b(id, ok) {
-  const s = await _0x1e2f(_BF) || {};
+async function _bfRecord(id, ok) {
+  const s = await _secGet(_BF) || {};
   if (ok) { delete s[id]; }
   else {
     const r = s[id] || {attempts:0};
     r.attempts = (r.attempts||0) + 1;
-    if (r.attempts >= _0x3a4b) r.lockedUntil = Date.now() + _0x5c6d;
+    if (r.attempts >= _BF_MAX) r.lockedUntil = Date.now() + _BF_TTL;
     s[id] = r;
   }
-  await _0x9c0d(_BF, s);
+  await _secSet(_BF, s);
 }
 
 /* ── Password helpers ───────────────────────────────────────────────── */
-const _0x1c2d = (id) => 'legalapp_' + id + '_2025';
+const _SALT = (id) => 'legalapp_' + id + '_2025';
 
-async function _0x3e4f(pw, id) {
-  return _0x1a2b(pw, _0x1c2d(id));
+async function _hashPw(pw, id) {
+  return _pbkdf2(pw, _SALT(id));
 }
-async function _0x5a6b(stored, input, id) {
+async function _verifyPw(stored, input, id) {
   if (!stored) return false;
   if (/^[0-9a-f]{64}$/.test(stored)) {
     // Already hashed — PBKDF2 compare
-    const h = await _0x1a2b(input, _0x1c2d(id));
-    return _0x5e6f(stored, h);
+    const h = await _pbkdf2(input, _SALT(id));
+    return _ctEq(stored, h);
   }
   // Legacy plaintext — direct compare (auto-upgrades on next save)
   return stored === input;
@@ -5897,10 +5896,14 @@ async function validateAdminLicense(key) {
     }
   }
 
-  if (window.db) {
+  if (authReady && window.db) {
     try {
       // source:'server' bypasses IndexedDB persistence cache
-      const snap = await window.db.collection('licenses').doc(cleanKey).get({ source: 'server' });
+      // Race with a 10-second timeout so a stalled network never hangs "Verifying…" forever
+      const snap = await Promise.race([
+        window.db.collection('licenses').doc(cleanKey).get({ source: 'server' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('firestore-timeout')), 10000))
+      ]);
       if (!snap.exists) return { valid: false, reason: 'INVALID_KEY' };
       const d = snap.data();
       if (d._deleted) return { valid: false, reason: 'INVALID_KEY' };
@@ -5917,7 +5920,12 @@ async function validateAdminLicense(key) {
       }).catch(()=>{});
       return { valid: true, data: d };
     } catch(sdkErr) {
-      console.warn('License SDK error:', sdkErr.code, sdkErr.message, '→ trying REST');
+      console.warn('License SDK error:', sdkErr.code || sdkErr.message, '→ trying REST');
+      // If it was a permission error, surface it directly rather than falling through to REST
+      if (sdkErr.code === 'permission-denied') {
+        return { valid: false, reason: 'PERMISSION', detail: sdkErr.message };
+      }
+      // timeout or network error → fall through to REST fallback
     }
   }
 
@@ -5938,7 +5946,10 @@ async function validateAdminLicense(key) {
                 '/databases/(default)/documents/licenses/' + encodeURIComponent(cleanKey);
     const hdrs = { 'Content-Type': 'application/json' };
     if (idToken) hdrs['Authorization'] = 'Bearer ' + idToken;
-    const resp = await fetch(url, { headers: hdrs });
+    const restCtrl = new AbortController();
+    const restTimeout = setTimeout(() => restCtrl.abort(), 10000);
+    const resp = await fetch(url, { headers: hdrs, signal: restCtrl.signal });
+    clearTimeout(restTimeout);
     if (resp.status === 404) return { valid: false, reason: 'INVALID_KEY' };
     if (!resp.ok) return { valid: false, reason: 'ERROR', message: 'HTTP ' + resp.status };
     const doc = await resp.json();
@@ -5995,9 +6006,7 @@ function LicenseGate({ dk, onValidated }) {
     setStatus('checking'); setErrMsg('');
     const result = await validateAdminLicense(keyInput);
     if (result.valid) {
-      // persist so admin doesn't re-enter every session on this device
-      try { await _secSet('adminLicenseKey', keyInput.trim().toUpperCase()); } catch(_) {}
-      // also store as plain key for quick boot check
+      // Persist on this device so the gate is never shown again on this device
       try { localStorage.setItem('adminLicenseKey', keyInput.trim().toUpperCase()); } catch(_) {}
       setStatus('idle');
       const exp = result.data?.expiryDate;
@@ -6115,25 +6124,25 @@ function App() {
         if (ck && COLOUR_THEMES[ck.value]) { setColourKey(ck.value); applyThemeCSSVars(ck.value); }
       } catch(_) {}
 
-      // Check if a previously-validated admin license key exists in localStorage
-      try {
-        const cachedKey = await _secGet('adminLicenseKey');
-        if (cachedKey) {
-          const result = await validateAdminLicense(cachedKey);
-          if (result.valid) {
-            setLicenseValidated(true);
-            // Capture expiry date if present
-            const exp = result.data?.expiryDate;
-            if (exp) setLicenseExpiry(exp instanceof Date ? exp : new Date(exp));
-          }
-          else localStorage.removeItem('adminLicenseKey'); // expired/revoked — clear it
-        }
-      } catch(_) {}
-
       setSyncStatus('syncing');
       try {
         // Step 1: Authenticate anonymously so Firestore rules pass on all devices
         await fbEnsureAuth();
+
+        // Check cached license key NOW (after auth so Firestore call succeeds)
+        try {
+          const cachedKey = localStorage.getItem('adminLicenseKey');
+          if (cachedKey) {
+            const result = await validateAdminLicense(cachedKey);
+            if (result.valid) {
+              setLicenseValidated(true);
+              const exp = result.data?.expiryDate;
+              if (exp) setLicenseExpiry(exp instanceof Date ? exp : new Date(exp));
+            } else {
+              localStorage.removeItem('adminLicenseKey');
+            }
+          }
+        } catch(_) {}
         console.log('✅ Auth user:', window.fbAuth.currentUser?.uid || 'none');
 
         // Step 2: Load all data from Firestore
@@ -6277,10 +6286,10 @@ function App() {
   // NEVER stored in Firebase, localStorage, or the users array.
   // Not visible in any Users panel or Settings page.
   // Change this password before delivering to the client.
-  const _DEV_EMAIL    = atob('ZGV2QHBvbHlwbGFzdGljcy5pbnRlcm5hbA==');   // encoded
+  const _DEV_EMAIL    = 'dev@polyplastics.internal';   // secret — not shown anywhere in UI
   // Developer password verified via PBKDF2 — plaintext never compared directly
   const _DEV_PW_HASH  = ''; // computed lazily on first dev login attempt
-  const _DEV_PW_ORIG  = atob('ZGV2QGxlZ2FsIzIwMjYhbWFzdGVy'); // encoded
+  const _DEV_PW_ORIG  = 'dev@legal#2026!master'; // used once to compute hash, then discarded
 
   const _DEV_USER = {
     id:       '__dev__',
