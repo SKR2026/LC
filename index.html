@@ -478,35 +478,46 @@ function FirebaseStatusBadge() {
 
 /* ─── LICENSE EXPIRY BADGE ─── */
 function LicenseExpiryBadge({ expiry }) {
-  if (!expiry) return null;
-  const expiryDate = expiry instanceof Date ? expiry : new Date(expiry);
-  if (isNaN(expiryDate)) return null;
+  // Always render — null expiry means lifetime/no-expiry license
+  if (expiry !== null && expiry !== undefined) {
+    const expiryDate = expiry instanceof Date ? expiry : new Date(expiry);
+    if (!isNaN(expiryDate)) {
+      const now      = new Date();
+      const diffMs   = expiryDate - now;
+      const diffDays = Math.ceil(diffMs / 86400000);
+      const formatted = expiryDate.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
 
-  const now = new Date();
-  const diffMs = expiryDate - now;
-  const diffDays = Math.ceil(diffMs / 86400000);
+      let bg, border, color, icon, label;
+      if (diffDays < 0) {
+        bg = 'rgba(239,68,68,.12)'; border = 'rgba(239,68,68,.35)'; color = '#ef4444';
+        icon = '⛔'; label = `Expired · ${formatted}`;
+      } else if (diffDays <= 30) {
+        bg = 'rgba(245,158,11,.13)'; border = 'rgba(245,158,11,.4)'; color = '#d97706';
+        icon = '⚠️'; label = `${diffDays}d left · ${formatted}`;
+      } else {
+        bg = 'rgba(22,163,74,.11)'; border = 'rgba(22,163,74,.28)'; color = '#16a34a';
+        icon = '✅'; label = `Valid · ${formatted}`;
+      }
 
-  let bg, border, color, icon, label;
-  if (diffDays < 0) {
-    bg = 'rgba(239,68,68,.12)'; border = 'rgba(239,68,68,.3)'; color = '#ef4444';
-    icon = '⛔'; label = 'License Expired';
-  } else if (diffDays <= 30) {
-    bg = 'rgba(245,158,11,.12)'; border = 'rgba(245,158,11,.3)'; color = '#d97706';
-    icon = '⚠️'; label = `Expires in ${diffDays}d`;
-  } else {
-    bg = 'rgba(22,163,74,.12)'; border = 'rgba(22,163,74,.25)'; color = '#16a34a';
-    icon = '✅'; label = `License valid`;
+      return (
+        <span title={`License expiry: ${formatted}`}
+          style={{display:'inline-flex',alignItems:'center',gap:4,background:bg,border:`1px solid ${border}`,
+                  borderRadius:16,padding:'2px 9px',fontSize:10,color,fontWeight:600,whiteSpace:'nowrap',
+                  cursor:'default',flexShrink:0,letterSpacing:'0.01em'}}>
+          {icon} {label}
+        </span>
+      );
+    }
   }
 
-  const formatted = expiryDate.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
-  const title = `License expiry: ${formatted}`;
-
+  // No expiry date set → lifetime license
   return (
-    <span
-      title={title}
-      style={{display:'inline-flex',alignItems:'center',gap:4,background:bg,border:`1px solid ${border}`,borderRadius:16,padding:'2px 8px',fontSize:10,color,fontWeight:600,whiteSpace:'nowrap',cursor:'default',flexShrink:0}}
-    >
-      {icon} {label}
+    <span title="License: No expiry (Lifetime)"
+      style={{display:'inline-flex',alignItems:'center',gap:4,
+              background:'rgba(22,163,74,.11)',border:'1px solid rgba(22,163,74,.28)',
+              borderRadius:16,padding:'2px 9px',fontSize:10,color:'#16a34a',fontWeight:600,
+              whiteSpace:'nowrap',cursor:'default',flexShrink:0,letterSpacing:'0.01em'}}>
+      ✅ License · Lifetime
     </span>
   );
 }
