@@ -835,14 +835,6 @@ function LoginPage({ login, dk, toggleTheme, colourKey, changeColour }) {
     }
   };
 
-  // Demo buttons fill email only — password must be entered manually (security)
-  const demos = [
-    { role:'Admin',          color:'#6366f1', email:'admin@legalcomp.com'   },
-    { role:'Top Management', color:'#9333ea', email:'topmgmt@legalcomp.com' },
-    { role:'Plant Head',     color:'#06b6d4', email:'rajesh@legalcomp.com'  },
-    { role:'User',           color:'#22c55e', email:'suresh@legalcomp.com'  },
-  ];
-
   return (
     <div className="min-h-screen flex" style={{fontFamily:"'DM Sans',sans-serif"}}>
       {/* Left */}
@@ -904,24 +896,6 @@ function LoginPage({ login, dk, toggleTheme, colourKey, changeColour }) {
               style={{background:'var(--p600)',boxShadow:'0 4px 12px var(--pshadow)'}}>
               {loading ? 'Verifying…' : 'Sign In →'}
             </button>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-2xl p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quick Demo Access</p>
-            <div className="space-y-2">
-              {demos.map(d=>(
-                <button key={d.role} onClick={()=>{setEmail(d.email);setPassword('');/* password not pre-filled for security */}}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors text-left border border-transparent hover:border-gray-200">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{background:d.color}}>{d.role[0]}</div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-700">{d.role}</p>
-                    <p className="text-xs text-gray-400">{d.email}</p>
-                  </div>
-                  <span className="ml-auto text-gray-300 text-xs">Click to fill →</span>
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Colour Theme Picker on Login */}
